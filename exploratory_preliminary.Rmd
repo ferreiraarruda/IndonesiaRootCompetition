@@ -1,0 +1,161 @@
+---
+title: "Roots traits"
+author: "Ferreira-Arruda"
+date: "2024-01-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Load necessary libraries
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+
+# Read the data
+data <- read.csv("./data/pairs_traits.csv", sep = ";")
+
+# Filter for species in system 'OO'
+filtered_data <- data %>% filter(system == "OO" | system== "CTRL")
+
+# Select columns from 'Length(cm)' to 'tips_lenghts'
+selected_data <- filtered_data %>% select(system, ratio_abs_tra, tips_lenghts, AvgDiam.mm.,
+                                          RTD, SRL, SRA)
+# Convert selected columns to numeric (except for the 'system' column)
+numeric_data <- selected_data %>% 
+  mutate(across(-system, ~ as.numeric(gsub(",", ".", .))))
+
+# Perform PCA
+pca_result <- PCA(numeric_data[, -1], scale.unit = TRUE, ncp = 5, graph = FALSE)
+
+# Plotting the PCA with different colors for 'OO' and 'CTRL' systems
+fviz_pca_biplot(pca_result, col.ind = numeric_data$system,
+                palette = c("blue", "red"),
+                #addEllipses = TRUE, ellipse.type = "confidence",
+                repel = TRUE, # Avoid text overlapping
+                arrow.size = 0.5, arrow.type = "closed")
+```
+
+```{r}
+selected_data <- data %>% select(-plot, -tag_id, -root_type, -species) %>% select(system, ratio_abs_tra, tips_lenghts, AvgDiam.mm.,RTD, SRL, SRA)
+
+# Convert selected columns to numeric (except for the 'system' column)
+numeric_data <- selected_data %>% 
+  mutate(across(-system, ~ as.numeric(gsub(",", ".", .))))
+
+numeric_data<- numeric_data[complete.cases(numeric_data),]
+
+# Perform PCA
+pca_result <- PCA(numeric_data[, -1], scale.unit = TRUE, ncp = 5, graph = FALSE)
+
+# Plotting the PCA with different colors for 'OO' and 'CTRL' systems
+fviz_pca_biplot(pca_result, col.ind = numeric_data$system,
+                #palette = c("blue", "red"),
+                addEllipses = TRUE, ellipse.type = "confidence",
+                repel = TRUE, # Avoid text overlapping
+                arrow.size = 0.5, arrow.type = "closed",
+                label = "none")
+```
+
+
+
+```{r}
+
+library(ggridges)
+# Filter for species classified as 'O'
+species_o_data <- data %>% filter(species == "O")
+
+# Convert necessary columns to numeric
+# Assuming we are interested in the same columns as before
+
+numeric_data <- species_o_data %>% 
+  select(-plot, -tag_id, -root_type, -species) %>% 
+  mutate(across(-system, ~ as.numeric(gsub(",", ".", .))))
+
+# Creating ridge plots for each trait across systems
+# Replace `trait_name` with the name of each trait column you want to plot
+for (trait_name in colnames(numeric_data)[3:length(numeric_data)]) {
+  plot <- ggplot(numeric_data, aes_string(x = trait_name, y = "system", fill = "system")) +
+    geom_density_ridges(alpha =0.5) +
+    geom_boxplot(aes_string(y = 0.2, x = trait_name, group = "system"), 
+                 alpha = 0.5, width = 1.5, outlier.shape = NA) +
+    #scale_y_continuous(expand = expansion(add = c(0.1, 0.2))) +
+    labs(title = paste("Variation of", trait_name, "per System"),
+         x = trait_name,
+         y = "System") +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  print(plot)
+}
+```
+
+```{r}
+# Perform PCA on this subset
+pca_result <- PCA(numeric_data[, -1], scale.unit = TRUE, ncp = 5, graph = FALSE)
+
+# Extract PCA scores (individuals' coordinates)
+pca_scores <- as.data.frame(pca_result$ind$coord)
+
+# Add the 'system' column back to the pca_scores dataframe for coloring
+pca_scores$system <- numeric_data$system
+
+# Creating ridge plots for the first few PCA dimensions
+# Creating ridge plots for the first few PCA dimensions
+for (pc in 1:3) { 
+  pc_name <- paste0("Dim.", pc) # Creates 'Dim1', 'Dim2', etc.
+  
+  # Dynamically creating plot titles and axis labels
+  plot_title <- paste("Distribution of PCA Dimension", pc, "Scores Across Systems")
+  x_label <- paste("PCA Dimension", pc, "Score")
+  
+  # Using aes() instead of aes_string() for dynamic variable names in ggplot2
+  plot <- ggplot(pca_scores, aes(x = get(pc_name), y = system, fill = system)) +
+    geom_density_ridges(alpha =0.5) +
+    labs(title = plot_title, x = x_label, y = "System") +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  print(plot)
+}
+
+```
+```{r}
+library(grid)
+library(gridExtra)
+
+
+var_contributions <- as.data.frame(pca_result$var$contrib[, 1:3])
+
+# Round the contributions to 3 decimal places
+var_contributions <- round(var_contributions, 3)
+
+# Rename the columns for clarity
+colnames(var_contributions) <- c("Dim 1 (%)", "Dim 2 (%)", "Dim 3 (%)")
+
+# Add the variable names as a new column
+var_contributions$Variable <- rownames(pca_result$var$contrib)
+
+# Sort by 'Dim 1 (%)' in descending order to show higher contributions first
+var_contributions <- var_contributions[order(-var_contributions$`Dim 1 (%)`),]
+
+# Create the table plot
+table_plot <- tableGrob(var_contributions, rows = NULL, theme = ttheme_minimal())
+
+# Plotting the table. Note: This is not a ggplot object but a gridExtra object.
+grid.draw(table_plot)
+
+```
+
+
+
+
+
+

@@ -1,0 +1,25 @@
+﻿ID;block;ecosystem;water;nutrient;species;gerade;focal;height;height_author;SPAD;SPAD_author;leaf_area
+001;A;single;D;N1;R.ace;;yes;19;HW;33,2;PJ;27,131
+002;A;single;D;N1;P.lan;;yes;23;HW;46,3;PJ;62,816
+003;A;single;W;N1;R.ace;;yes;19;HW;34,2;PJ;40,703
+004;A;single;W;N1;P.lan;;yes;22;HW;44,8;PJ;56,359
+005;A;single;W;N0;R.ace;;yes;16;HW;33;PJ;40,394
+006;A;single;W;N0;P.lan;;yes;15;HW;38,3;PJ;27,004
+007;A;single;D;N0;R.ace;;yes;6;HW;26,2;PJ;16,185
+008;A;single;D;N0;P.lan;;yes;14;HW;35,4;PJ;17,135
+009;A;mono;W;N1;P.lan;;yes;24;HW;42,6;PJ;75,277
+010;A;mono;W;N1;P.lan;;no;29;HW;42;PJ;
+011;A;mono;W;N0;P.lan;;yes;18;HW;39,9;PJ;24,853
+012;A;mono;W;N0;P.lan;;no;12;HW;41,9;PJ;
+013;A;mono;D;N0;P.lan;;yes;14;HW;36;PJ;24,853
+014;A;mono;D;N0;P.lan;;no;12;HW;36,2;PJ;
+015;A;mono;D;N1;P.lan;;yes;24;HW;42,8;PJ;51,882
+016;A;mono;D;N1;P.lan;;no;24;HW;43,6;PJ;
+017;A;mono;W;N1;R.ace;;yes;26;HW;32,6;PJ;67,712
+018;A;mono;W;N1;R.ace;;no;19;HW;37;PJ;
+019;A;mono;D;N0;R.ace;;yes;10;HW;21,7;PJ;15,390
+020;A;mono;D;N0;R.ace;;no;6;HW;25,9;PJ;
+021;A;mono;D;N1;R.ace;;yes;24;HW;36,9;PJ;33,005
+022;A;mono;D;N1;R.ace;;no;20;HW;42,6;PJ;
+023;A;mix ;W;N1;P.lan;;yes;26;HW;42,7;PJ;71,128
+024;A;mix ;W;N1;R.ace;;yes;20;HW;38,4;PJ;58,066

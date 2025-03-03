@@ -1,0 +1,350 @@
+---
+title: "Roots traits"
+author: "Ferreira-Arruda"
+date: "2024-01-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load necessary libraries
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(glue)
+library(vegan)
+library(ggpubr)
+library(FactoMineR)
+library(ggrepel)
+library(ggExtra)
+library(stringr)
+
+# Read the data
+data <- read.csv("./data/pairs_traits.csv", sep = ";", dec = ",")
+head(data)
+nitro.d<- read.csv("./data/nitro.csv",sep = ";", dec = ",")
+
+data$sample_id <- paste(data$tag_id, data$root_type, sep = "_")
+#\\d{4}: Matches exactly 4 consecutive digits.
+#[a-z]{2}: Matches an underscore followed by exactly two lowercase
+
+nitro.d$sample_id<- str_extract(nitro.d$Originalbez, "(?<=SRI_).*?(?=_[^_]*$|$)")
+nitro.d<- select(nitro.d,Originalbez, sample_id, Ntotal.mmol.g.)
+nitro.d<- na.omit(nitro.d)
+nitro.d$sample_id[which(nitro.d$Originalbez == "54_SRI_MT_ab_O")]<- "MT_54_ab"
+nitro.d$sample_id[which(nitro.d$Originalbez == "55_SRI_MT_ab_")]<- "MT_55_ab"
+nitro.d$sample_id[which(nitro.d$Originalbez == "54_SRI_MT_tr_O")]<- "MT_54_tr"
+nitro.d$sample_id[which(nitro.d$Originalbez == "55_SRI_MT_tr_")]<- "MT_55_tr"
+
+
+
+nitro.d$sample_id <- sub("^0+", "", nitro.d$sample_id)
+
+
+data<- left_join(data, nitro.d, by = "sample_id")
+data<- data %>% select(., -Originalbez)
+data<- data[!is.na(data$Ntotal.mmol.g.), ]
+
+#merge OO with CRTL because what am I gonna do with 2 sample? 
+
+data$system[which(data$system == "OO")]<- "CTRL"
+
+
+```
+
+# Merging TRA and ABS roots
+
+```{r}
+
+roots_mer <- data %>%
+  group_by(tag_id) %>% select(-plot) %>%
+  summarize(across(where(is.numeric), ~ sum(. * dry_weight_g, na.rm = TRUE) / sum(dry_weight_g, na.rm = TRUE), .names = "weighted_avg_{col}"))
+
+
+roots_mer<- unique(left_join(roots_mer, select(data, tag_id, species, system), by = "tag_id"))
+roots_mer <- roots_mer %>%
+  filter(!if_any(everything(), is.nan))
+```
+
+## Keeping only the traits we are interested
+
+```{r}
+roots.m.sub<- roots_mer %>% select(tag_id, species,system, weighted_avg_ratio_abs_tra, weighted_avg_tips_lenghts, 
+                                   weighted_avg_AvgDiamWeight.mm., weighted_avg_RTD, weighted_avg_SRL, weighted_avg_SRA, weighted_avg_ratio_abs_tra, weighted_avg_Ntotal.mmol.g.)
+
+colnames(roots.m.sub)<- c("tag_id", "species", "system", "Abs_Tra_ratio", "Tip_lenght", "Diameter",
+                          "RTD", "SRL", "SRA", "Nitrogen")
+
+```
+
+# Oil palm trait space
+
+## Only oil palms
+
+```{r}
+oil_alone<- roots.m.sub %>% filter(system == "OO" | system== "CTRL")
+# Perform PCA
+pca_result <- PCA(oil_alone[, -c(1:3)], scale.unit = TRUE, graph = FALSE)
+
+# Plotting the PCA with different colors for 'OO' and 'CTRL' systems
+fviz_pca_biplot(pca_result,col.ind = oil_alone$system,
+                #palette = c("blue", "red"),
+                #addEllipses = TRUE, ellipse.type = "confidence",
+                repel = TRUE, # Avoid text overlapping
+                arrow.size = 0.5, arrow.type = "closed",
+                label = "none")
+```
+
+## With native trees
+
+```{r}
+
+# Perform PCA
+oil_traits<- filter(roots.m.sub, species == "O")
+
+
+
+pca_result_all <- PCA(oil_traits[, -c(1:3)], scale.unit = TRUE, graph = FALSE)
+
+# Plotting the PCA with different colors for 'OO' and 'CTRL' systems
+fviz_pca_biplot(pca_result_all,col.ind = oil_traits$system,
+                #addEllipses = TRUE, ellipse.type = "confidence",
+                repel = TRUE, # Avoid text overlapping
+                arrow.size = 0.5, arrow.type = "closed",
+                label = "none")
+
+```
+
+# Traits distributions
+
+```{r}
+
+library(ggridges)
+# Filter for species classified as 'O'
+species_o_data <- roots.m.sub %>% filter(species == "O")
+
+# Convert necessary columns to numeric
+# Assuming we are interested in the same columns as before
+
+numeric_data <- species_o_data %>% 
+  select(-tag_id, -species) %>% 
+  mutate(across(-system, ~ as.numeric(gsub(",", ".", .))))
+
+# Creating ridge plots for each trait across systems
+# Replace `trait_name` with the name of each trait column you want to plot
+for (trait_name in colnames(numeric_data)[2:length(numeric_data)]) {
+  plot <- ggplot(numeric_data, aes_string(x = trait_name, y = "system", fill = "system")) +
+        scale_fill_manual(values = c("#9DD6E0", "#C670E0", "#E0AA7B", "#B0D6B1", "#E09DC6")) +
+    geom_density_ridges(alpha =0.8) +
+    geom_boxplot(aes_string(y = 0.2, x = trait_name, group = "system"), 
+                 alpha = 0.5, width = 1.5, outlier.shape = NA) +
+    #scale_y_continuous(expand = expansion(add = c(0.1, 0.2))) +
+    labs(title = paste(trait_name, "per System"),
+         x = trait_name,
+         y = "System") +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  print(plot)
+  # Save the plot
+  ggsave(filename = paste0("figures/", trait_name, "_system_plot.png"),
+         plot = plot, 
+         width = 8, height = 6, dpi = 300)
+}
+
+
+for (trait_name in colnames(numeric_data)[2:length(numeric_data)]) {
+  plot <- ggplot(numeric_data, aes_string(y = trait_name, x = "system", fill = "system")) +
+    scale_fill_manual(values = c("#9DD6E0", "#C670E0", "#E0AA7B", "#B0D6B1", "#E09DC6")) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(alpha = 0.2) +
+    labs(title = paste(trait_name, "per System"),
+         x = "System",
+         y = trait_name) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  print(plot)
+}
+
+
+
+```
+
+High SRA points out to a more acquisitive strategy. Higher proportion of fine roots. Could indicate a shift towars are more competitive strategy, increasing fast resource acquisition.
+
+Lower Root tissue density also shows a shift to a more fast growin acquisitive strategy.
+
+Over all for all the traits we analyzed, Palm oil seems to widen the range of trait values when its competing with the native species.
+
+```{r}
+# Perform PCA on this subset
+pca_result <- PCA(numeric_data[, -1], scale.unit = TRUE, ncp = 5, graph = FALSE)
+
+# Extract PCA scores (individuals' coordinates)
+pca_scores <- as.data.frame(pca_result$ind$coord)
+
+# Add the 'system' column back to the pca_scores dataframe for coloring
+pca_scores$system <- numeric_data$system
+
+# Creating ridge plots for the first few PCA dimensions
+# Creating ridge plots for the first few PCA dimensions
+for (pc in 1:3) { 
+  pc_name <- paste0("Dim.", pc) # Creates 'Dim1', 'Dim2', etc.
+  
+  # Dynamically creating plot titles and axis labels
+  plot_title <- paste("Distribution of PCA Dimension", pc, "Scores Across Systems")
+  x_label <- paste("PCA Dimension", pc, "Score")
+  
+  # Using aes() instead of aes_string() for dynamic variable names in ggplot2
+  plot <- ggplot(pca_scores, aes(x = get(pc_name), y = system, fill = system)) +
+    geom_density_ridges(alpha =0.5) +
+    labs(title = plot_title, x = x_label, y = "System") +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  print(plot)
+}
+
+```
+
+```{r}
+
+PCAloadings <- as.data.frame(pca_result$var$coord) # extract PCA loadings
+PCAloadings$trait <- rownames(PCAloadings)
+
+
+
+my_theme1 <- theme( axis.title.x=element_text(colour="black",face="bold",size=15),
+                    axis.title.y=element_text(colour="black",face="bold",size=15),
+                    axis.text.x=element_text(colour=c("black"),face="bold",size=15),
+                    axis.text.y=element_text(colour=c("black"),face="bold",size=15),
+                    legend.position = c(0.15,0.15), legend.direction="vertical", 
+                    legend.key = element_rect(fill="transparent"),
+                    legend.key.size = unit(0.5,"line"),
+                    legend.title = element_blank(),
+                    legend.text = element_text(size=12, color="black"),
+                    panel.background = element_rect(fill="transparent",colour="black"),
+                    panel.grid.minor = element_blank(),
+                    panel.border = element_rect(fill=NA,colour="grey"),
+                    plot.title = element_text(size = 20))
+
+
+
+pca_plot<- ggplot(pca_scores, aes(Dim.1, Dim.2, col = system)) + 
+  scale_color_manual(values = c("#9DD6E0", "#C670E0", "#E0AA7B", "#B0D6B1", "#E09DC6", "#A09DC6")) +
+  #stat_density_2d(geom = "polygon", contour = TRUE, aes(fill = after_stat(level)), 
+                  #colour = "gray80", bins = 10, show.legend = F) + #bins is for the number of contours
+  geom_jitter(alpha = 0.9, size =3.5) + # Display the points
+  geom_text_repel(data = PCAloadings, aes(x = Dim.1*3.5, y = Dim.2*3.3, label = trait), size = 4, inherit.aes = F, 
+                  segment.color = 'transparent', color = "black") + # scale the loadings
+  geom_segment(data = PCAloadings, size = 0.8, inherit.aes = F, # Plots the loadings, i.e., traits
+               aes(x = 0, xend = Dim.1*3, y = 0, yend = Dim.2*3),
+               arrow = arrow(length = unit(0.5, "cm")),colour = "black") +
+  #xlab(paste("PC1 ", round(qt$eig[1, 2]), "%")) + ylab(paste("PC2 ", round(qt$eig[2, 2]), "%")) +
+  #scale_x_continuous(limits=c(-5,6)) +
+  #scale_y_continuous(limits=c(-5,5)) +
+  #my_theme1 + guides(colour= guide_legend(override.aes = list(size=4))) +
+  theme_minimal() +
+  ggtitle("Oil Palm Roots Trait Space")+
+  theme(legend.position = "right")
+pca_plot
+
+ggsave(filename = paste0("figures/", "oil_palm_pc", ".png"),
+         plot = pca_plot, 
+         width = 8, height = 6, dpi = 300)
+
+pca_plot_dens<-  ggMarginal(pca_plot, type = "density", margins = "both", size = 5, groupColour = TRUE, groupFill = TRUE)
+pca_plot_dens
+
+```
+
+```{r}
+library(grid)
+library(gridExtra)
+
+
+var_contributions <- as.data.frame(pca_result$var$contrib[, 1:3])
+
+# Round the contributions to 3 decimal places
+var_contributions <- round(var_contributions, 3)
+
+# Rename the columns for clarity
+colnames(var_contributions) <- c("Dim 1 (%)", "Dim 2 (%)", "Dim 3 (%)")
+
+# Add the variable names as a new column
+var_contributions$Variable <- rownames(pca_result$var$contrib)
+
+# Sort by 'Dim 1 (%)' in descending order to show higher contributions first
+var_contributions <- var_contributions[order(-var_contributions$`Dim 1 (%)`),]
+
+# Create the table plot
+table_plot <- tableGrob(var_contributions, rows = NULL, theme = ttheme_minimal())
+
+# Plotting the table. Note: This is not a ggplot object but a gridExtra object.
+grid.draw(table_plot)
+
+```
+
+```{r}
+
+pca_all_sp <- PCA(roots.m.sub[, -c(1:3)], scale.unit = TRUE, ncp = 5, graph = FALSE)
+
+
+# Extract PCA scores (individuals' coordinates)
+pca_scores2 <- as.data.frame(pca_all_sp$ind$coord)
+pca_scores2$system <- roots.m.sub$system
+pca_scores2$species <- roots.m.sub$species
+
+
+
+PCAloadings2 <- as.data.frame(pca_all_sp$var$coord) # extract PCA loadings
+PCAloadings2$trait2 <- rownames(PCAloadings2)
+
+
+
+my_theme1 <- theme( axis.title.x=element_text(colour="black",face="bold",size=15),
+                    axis.title.y=element_text(colour="black",face="bold",size=15),
+                    axis.text.x=element_text(colour=c("black"),face="bold",size=15),
+                    axis.text.y=element_text(colour=c("black"),face="bold",size=15),
+                    legend.position = c(0.15,0.15), legend.direction="vertical", 
+                    legend.key = element_rect(fill="transparent"),
+                    legend.key.size = unit(0.5,"line"),
+                    legend.title = element_blank(),
+                    legend.text = element_text(size=12, color="black"),
+                    panel.background = element_rect(fill="transparent",colour="black"),
+                    panel.grid.minor = element_blank(),
+                    panel.border = element_rect(fill=NA,colour="grey"),
+                    plot.title = element_text(size = 20))
+
+
+
+pca_plot2 <- ggplot(pca_scores2[-48,], aes(Dim.1, Dim.2, col = system)) + 
+  scale_color_manual(values = c("#9DD6E0", "#C670E0", "#E0AA7B", "#B0D6B1", "#E09DC6", "#A09DC6", "#F0D4B9")) +
+  geom_jitter(aes(shape = species), 
+              alpha = 0.9, size = 3.5) + # Map shape directly to species
+  scale_shape_manual(values = c("SHO" = 16, "PAR" = 16, "ARC" = 16, "PER" = 16, "O" = 15), guide = "none") + # Define shapes
+  geom_text_repel(data = PCAloadings2, aes(x = Dim.1*3.5, y = Dim.2*3.5, label = trait2), 
+                  size = 4, inherit.aes = F, 
+                  segment.color = 'transparent', color = "black") + # Scale the loadings
+  geom_segment(data = PCAloadings2, size = 0.8, inherit.aes = F, # Plot the loadings
+               aes(x = 0, xend = Dim.1*3, y = 0, yend = Dim.2*3),
+               arrow = arrow(length = unit(0.5, "cm")), colour = "black") +
+  theme_minimal()+
+  ggtitle("Oil Palm + Native trees Roots Trait Space")+
+  theme(legend.position = "right")
+pca_plot2
+ggsave(filename = paste0("figures/", "all_trees_pc", ".png"),
+         plot = pca_plot2, 
+         width = 8, height = 6, dpi = 300)
+
+pca_plot_dens2<-  ggMarginal(pca_plot2, type = "density", margins = "both", size = 5, groupColour = TRUE, groupFill = TRUE)
+pca_plot_dens2
+
+```
